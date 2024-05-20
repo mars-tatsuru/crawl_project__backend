@@ -35,6 +35,9 @@ const client = new S3Client({
   },
 });
 
+// get s3 url
+const s3Url = `https://${env.BUCKETNAME}.s3.${env.REGION}.amazonaws.com`;
+
 // URL to crawl
 const crawlUrl = "https://www.marsflag.com/";
 
@@ -101,7 +104,7 @@ const crawler = new PlaywrightCrawler({
     await pushData({
       title,
       url,
-      thumbnailPath: `/${thumbnailFolder}/${thumbnailName}`,
+      thumbnailPath: `${s3Url}/${env.FILEPATH}/snapshoot/${thumbnailName}`,
     });
   },
 });
@@ -202,6 +205,20 @@ export const migration = async () => {
   await KeyValueStore.setValue("page_data_sorted", sortDataSetObjArr);
   await KeyValueStore.setValue("site_tree", result);
   await KeyValueStore.setValue("site_path", pathParts);
+
+  // send the result to the aws s3 bucket
+  const command = new PutObjectCommand({
+    Bucket: `${env.BUCKETNAME}`,
+    Key: `${env.FILEPATH}/tree/site_tree.json`,
+    Body: Buffer.from(JSON.stringify(result)),
+    ContentType: "application/json",
+  });
+
+  try {
+    await client.send(command);
+  } catch (err) {
+    console.error(err);
+  }
 
   return result;
 };

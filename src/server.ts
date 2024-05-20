@@ -32,6 +32,7 @@ server.get("/test", async (request, reply) => {
   reply.send("/test called");
 });
 
+// crawl API
 server.get("/crawl", async (request, reply) => {
   // Run the crawler and process the data
   let result;
@@ -43,5 +44,4 @@ server.get("/crawl", async (request, reply) => {
   }
 
   reply.send(`${JSON.stringify(result)}`);
-  reply.status(200).send(`${JSON.stringify(result)}`);
 });
