@@ -15,8 +15,6 @@ server.register(multiPart, {
   },
 });
 
-const crawlUrl = "https://www.marsflag.com/";
-
 /*******************************************************
  * CREATE SERVER
  *******************************************************/

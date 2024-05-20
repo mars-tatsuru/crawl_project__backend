@@ -1,5 +1,3 @@
-// https://crawlee.dev/docs/examples/crawl-relative-links
-const crawlUrl = "https://www.marsflag.com/";
 import {
   PlaywrightCrawler,
   EnqueueStrategy,
@@ -7,16 +5,48 @@ import {
   KeyValueStore,
 } from "crawlee";
 
-/********************
+// use ts-dotenv to load environment variables
+import { load } from "ts-dotenv";
+import {
+  PutObjectCommand,
+  S3Client,
+  GetObjectCommand,
+  CreateMultipartUploadCommand,
+} from "@aws-sdk/client-s3";
+
+// Load environment variables from .env.local file
+const env = load(
+  {
+    AWS_ACCESS_KEY_ID: String,
+    AWS_SECRET_ACCESS_KEY: String,
+    REGION: String,
+    BUCKETNAME: String,
+    FILEPATH: String,
+  },
+  { path: ".env.local" }
+);
+
+// Create an S3 client
+const client = new S3Client({
+  region: env.REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// URL to crawl
+const crawlUrl = "https://www.marsflag.com/";
+
+/****************************************
  * crawler settings
- ********************/
+ ****************************************/
 const urls: string[] = [];
 import path from "path";
 
 const crawler = new PlaywrightCrawler({
   // Limitation for only 10 requests (do not use if you want to crawl all links)
   // https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
-  // NOTE: In cases of parallel crawling, the actual number of pages visited might be slightly higher than this value.
   maxRequestsPerCrawl: 20,
 
   async requestHandler({ request, page, enqueueLinks, log, pushData }) {
@@ -25,10 +55,7 @@ const crawler = new PlaywrightCrawler({
 
     // https://crawlee.dev/api/core/function/enqueueLinks
     await enqueueLinks({
-      // strategy: EnqueueStrategy.SameDomain,
-      // strategy: EnqueueStrategy.All,
       strategy: EnqueueStrategy.SameOrigin,
-      // globs: [`${crawlUrl}/*/*/*`],
       transformRequestFunction(req) {
         // ignore all links ending with `.pdf`
         if (req.url.endsWith(".pdf")) return false;
@@ -67,12 +94,14 @@ const crawler = new PlaywrightCrawler({
     await page.waitForLoadState("networkidle");
 
     // take a screenshot of the page
-    await page.screenshot({ path: thumbnailPath });
+    const image = await page.screenshot({ path: thumbnailPath });
+
+    postDataToBucket(thumbnailName, image);
 
     await pushData({
       title,
       url,
-      thumbnailPath: `/screenshots/${thumbnailName}`,
+      thumbnailPath: `/${thumbnailFolder}/${thumbnailName}`,
     });
   },
 });
@@ -175,4 +204,23 @@ export const migration = async () => {
   await KeyValueStore.setValue("site_path", pathParts);
 
   return result;
+};
+
+/*********************
+ * HELPER FUNCTIONS
+ *********************/
+const postDataToBucket = async (screenshotName: string, fileData: Buffer) => {
+  const command = new PutObjectCommand({
+    Bucket: `${env.BUCKETNAME}`,
+    Key: `${env.FILEPATH}/snapshoot/${screenshotName}`,
+    Body: fileData,
+    ContentType: "png",
+  });
+
+  try {
+    const response = await client.send(command);
+    return response;
+  } catch (err) {
+    console.error(err);
+  }
 };
