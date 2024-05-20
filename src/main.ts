@@ -3,6 +3,9 @@ import {
   EnqueueStrategy,
   Dataset,
   KeyValueStore,
+  Dictionary,
+  Request,
+  RequestOptions,
 } from "crawlee";
 
 // use ts-dotenv to load environment variables
@@ -39,7 +42,7 @@ const client = new S3Client({
 const s3Url = `https://${env.BUCKETNAME}.s3.${env.REGION}.amazonaws.com`;
 
 // URL to crawl
-const crawlUrl = "https://www.marsflag.com/";
+let crawlUrl = "";
 
 /****************************************
  * crawler settings
@@ -109,7 +112,10 @@ const crawler = new PlaywrightCrawler({
   },
 });
 
-export const runCrawl = async () => {
+export const runCrawl = async (
+  siteUrl: string | Request<Dictionary> | RequestOptions<Dictionary>
+) => {
+  crawlUrl = siteUrl.toString();
   await crawler.run([crawlUrl]);
 };
 

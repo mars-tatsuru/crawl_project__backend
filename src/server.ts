@@ -27,21 +27,23 @@ server.listen({ port: 8000, host: "0.0.0.0" }, (err, address) => {
 });
 
 // API
-server.get("/test", async (request, reply) => {
+server.get("/test", async (request: any, reply: any) => {
   console.log("/test called");
   reply.send("/test called");
 });
 
 // crawl API
-server.get("/crawl", async (request, reply) => {
+server.get("/crawl", async (request: any, reply: any) => {
+  const { siteUrl } = request.query;
   // Run the crawler and process the data
   let result;
   try {
-    await runCrawl();
+    await runCrawl(siteUrl);
     result = await migration();
+    console.log("Crawling and migration completed successfully");
   } catch (error) {
     console.error("Error occurred during crawling or migration:", error);
   }
 
-  reply.send(`${JSON.stringify(result)}`);
+  reply.send(result);
 });
