@@ -3,3 +3,4 @@ storage
 pnpm-lock.yaml
 *.env
 .env.local
+screenshots
