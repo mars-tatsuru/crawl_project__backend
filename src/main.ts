@@ -245,5 +245,6 @@ const postDataToBucket = async (screenshotName: string, fileData: Buffer) => {
     return response;
   } catch (err) {
     console.error(err);
+    return err;
   }
 };

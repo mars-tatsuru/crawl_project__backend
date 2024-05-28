@@ -2,11 +2,30 @@ import fastify from "fastify";
 import multiPart from "@fastify/multipart";
 import cors from "@fastify/cors";
 import { runCrawl, migration } from "./main";
+import fastifyCors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 
 const server = fastify();
-server.register(cors, {
-  origin: "*",
+// CORS configuration
+
+const whitelist = [
+  // Add more client URLs as needed
+  "http://localhost:3000",
+  "http://192.168.0.116:3000",
+  "http://127.0.0.1:3000",
+];
+
+server.register(fastifyCors, {
+  // origin: (origin, callback) => {
+  //   if (!origin || whitelist.includes(origin)) {
+  //     callback(null, true);
+  //   } else {
+  //     callback(new Error("Not allowed by CORS"), false);
+  //   }
+  // },
+  origin: true,
 });
+
 server.register(multiPart, {
   attachFieldsToBody: "keyValues",
   limits: {
@@ -18,7 +37,7 @@ server.register(multiPart, {
 /*******************************************************
  * CREATE SERVER
  *******************************************************/
-server.listen({ port: 8000, host: "0.0.0.0" }, (err, address) => {
+server.listen({ port: 8080, host: "0.0.0.0" }, (err, address) => {
   if (err) {
     console.error(err);
     process.exit(1);
@@ -30,6 +49,7 @@ server.listen({ port: 8000, host: "0.0.0.0" }, (err, address) => {
 server.get("/test", async (request: any, reply: any) => {
   console.log("/test called");
   reply.send("/test called");
+  return request;
 });
 
 // crawl API

@@ -1,2 +1,9 @@
-# .dockerignore
+# configurations
+.idea
+
+# crawlee storage folders
+crawlee_storage
+storage
+
+# installed files
 node_modules
