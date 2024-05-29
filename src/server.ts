@@ -13,6 +13,7 @@ const whitelist = [
   "http://localhost:3000",
   "http://192.168.0.116:3000",
   "http://127.0.0.1:3000",
+  "https://crawl-project-frontend.vercel.app/",
 ];
 
 server.register(fastifyCors, {
@@ -59,11 +60,12 @@ server.get("/crawl", async (request: any, reply: any) => {
   let result;
   try {
     await runCrawl(siteUrl);
-    result = await migration();
+    result = await migration(siteUrl);
+    console.log(`${result} crawled and migrated successfully`);
     console.log("Crawling and migration completed successfully");
   } catch (error) {
     console.error("Error occurred during crawling or migration:", error);
   }
 
-  reply.send(result);
+  reply.send({ message: result });
 });

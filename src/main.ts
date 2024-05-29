@@ -122,7 +122,9 @@ export const runCrawl = async (
 /***************************************************************************************
  * Open the dataset and save the result of the map to the default Key-value store
  ***************************************************************************************/
-export const migration = async () => {
+export const migration = async (siteUrl: string) => {
+  const domainName = siteUrl.replace(/https?:\/\//, "").split("/")[0];
+
   const dataset = await Dataset.open<{
     url: string;
     title: string;
@@ -215,7 +217,7 @@ export const migration = async () => {
   // send the result to the aws s3 bucket
   const command = new PutObjectCommand({
     Bucket: `${env.BUCKETNAME}`,
-    Key: `${env.FILEPATH}/tree/site_tree.json`,
+    Key: `${env.FILEPATH}/tree/${domainName}.json`,
     Body: Buffer.from(JSON.stringify(result)),
     ContentType: "application/json",
   });
@@ -226,7 +228,7 @@ export const migration = async () => {
     console.error(err);
   }
 
-  return result;
+  return domainName;
 };
 
 /*********************
