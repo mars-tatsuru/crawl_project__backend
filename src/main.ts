@@ -3,43 +3,25 @@ import {
   EnqueueStrategy,
   Dataset,
   KeyValueStore,
-  Dictionary,
-  Request,
-  RequestOptions,
 } from "crawlee";
 
 // use ts-dotenv to load environment variables
 import { load } from "ts-dotenv";
-import {
-  PutObjectCommand,
-  S3Client,
-  GetObjectCommand,
-  CreateMultipartUploadCommand,
-} from "@aws-sdk/client-s3";
+
+// Import supabase client
+import { createClient } from "@supabase/supabase-js";
 
 // Load environment variables from .env.local file
 const env = load(
   {
-    AWS_ACCESS_KEY_ID: String,
-    AWS_SECRET_ACCESS_KEY: String,
-    REGION: String,
-    BUCKETNAME: String,
-    FILEPATH: String,
+    SUPABASE_URL: String,
+    SUPABASE_KEY: String,
   },
   { path: ".env.local" }
 );
 
-// Create an S3 client
-const client = new S3Client({
-  region: env.REGION,
-  credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-// get s3 url
-const s3Url = `https://${env.BUCKETNAME}.s3.${env.REGION}.amazonaws.com`;
+// Create a single supabase client for interacting with your database
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
 // URL to crawl
 let crawlUrl = "";
@@ -102,27 +84,20 @@ const crawler = new PlaywrightCrawler({
     // take a screenshot of the page
     const image = await page.screenshot({ path: thumbnailPath });
 
-    postDataToBucket(thumbnailName, image);
+    const supabaseImagePath = await uploadToSupabase(thumbnailName, image);
 
     await pushData({
       title,
       url,
-      thumbnailPath: `${s3Url}/${env.FILEPATH}/snapshoot/${thumbnailName}`,
+      thumbnailPath: supabaseImagePath,
     });
   },
 });
 
-export const runCrawl = async (
-  siteUrl: string | Request<Dictionary> | RequestOptions<Dictionary>
-) => {
-  crawlUrl = siteUrl.toString();
-  await crawler.run([crawlUrl]);
-};
-
 /***************************************************************************************
  * Open the dataset and save the result of the map to the default Key-value store
  ***************************************************************************************/
-export const migration = async () => {
+const migration = async (userId: string) => {
   const dataset = await Dataset.open<{
     url: string;
     title: string;
@@ -207,21 +182,10 @@ export const migration = async () => {
   });
 
   // saving result of map to default Key-value store
-  await KeyValueStore.setValue("page_data", dataSetObjArr);
-  await KeyValueStore.setValue("page_data_sorted", sortDataSetObjArr);
   await KeyValueStore.setValue("site_tree", result);
-  await KeyValueStore.setValue("site_path", pathParts);
-
-  // send the result to the aws s3 bucket
-  const command = new PutObjectCommand({
-    Bucket: `${env.BUCKETNAME}`,
-    Key: `${env.FILEPATH}/tree/site_tree.json`,
-    Body: Buffer.from(JSON.stringify(result)),
-    ContentType: "application/json",
-  });
 
   try {
-    await client.send(command);
+    await insertCrawlData(userId, result);
   } catch (err) {
     console.error(err);
   }
@@ -232,18 +196,43 @@ export const migration = async () => {
 /*********************
  * HELPER FUNCTIONS
  *********************/
-const postDataToBucket = async (screenshotName: string, fileData: Buffer) => {
-  const command = new PutObjectCommand({
-    Bucket: `${env.BUCKETNAME}`,
-    Key: `${env.FILEPATH}/snapshoot/${screenshotName}`,
-    Body: fileData,
-    ContentType: "png",
+const uploadToSupabase = async (fileName: string, image: Buffer) => {
+  console.log(`Uploading image ${fileName} to Supabase storage...`);
+  const { data, error } = await supabase.storage
+    .from("thumbnail")
+    .upload(`public/${fileName}`, image, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("Error uploading file:", error);
+    throw error;
+  }
+
+  return data.path;
+};
+
+const insertCrawlData = async (userId: string, data: any) => {
+  const { data: crawlData, error } = await supabase.from("crawl_data").insert({
+    user_id: userId,
+    json_data: data,
   });
 
-  try {
-    const response = await client.send(command);
-    return response;
-  } catch (err) {
-    console.error(err);
+  if (error) {
+    console.error("Error inserting data:", error);
   }
+
+  return crawlData;
+};
+
+/****************************************
+ * Main crawl function
+ ****************************************/
+export const runCrawl = async (userId: string, siteUrl: string) => {
+  crawlUrl = siteUrl.toString();
+  await crawler.run([siteUrl]);
+  const result = migration(userId);
+
+  return result;
 };
