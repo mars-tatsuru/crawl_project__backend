@@ -32,72 +32,77 @@ let crawlUrl = "";
 const urls: string[] = [];
 import path from "path";
 
-const crawler = new PlaywrightCrawler({
-  // Limitation for only 10 requests (do not use if you want to crawl all links)
-  // https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
-  maxRequestsPerCrawl: 20,
+const mainCrawl = async (userId: string, siteUrl: string) => {
+  const crawler = new PlaywrightCrawler({
+    // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
+    maxRequestsPerCrawl: 20,
 
-  async requestHandler({ request, page, enqueueLinks, log, pushData }) {
-    // Log the URL of the page being crawled
-    log.info(`crawling ${request.url}...`);
+    async requestHandler({ request, page, enqueueLinks, log, pushData }) {
+      // Log the URL of the page being crawled
+      log.info(`crawling ${request.url}...`);
 
-    // https://crawlee.dev/api/core/function/enqueueLinks
-    await enqueueLinks({
-      strategy: EnqueueStrategy.SameOrigin,
-      transformRequestFunction(req) {
-        // ignore all links ending with `.pdf`
-        if (req.url.endsWith(".pdf")) return false;
-        return req;
-      },
-    });
+      // https://crawlee.dev/api/core/function/enqueueLinks
+      await enqueueLinks({
+        strategy: EnqueueStrategy.SameOrigin,
+        transformRequestFunction(req) {
+          // ignore all links ending with `.pdf`
+          if (req.url.endsWith(".pdf")) return false;
+          return req;
+        },
+      });
 
-    // Save the page data to the dataset
-    const title = await page.title();
-    const url = page.url();
+      // Save the page data to the dataset
+      const title = await page.title();
+      const url = page.url();
 
-    // Capture the screenshot of the page
-    const thumbnailFolder = path.join("screenshots");
-    let thumbnailName = "";
+      // Capture the screenshot of the page
+      const thumbnailFolder = path.join("screenshots");
+      let thumbnailName = "";
 
-    const renameThumbnailName = () => {
-      if (url.replace(`${crawlUrl}`, "") === "") {
-        thumbnailName = `${url
-          .replace(`${crawlUrl}`, "top")
-          .replace("#", "")
-          .replace(/\//g, "-")
-          .replace(/-$/, "")}.png`;
-      } else {
-        thumbnailName = `${url
-          .replace(`${crawlUrl}`, "")
-          .replace("#", "")
-          .replace(/\//g, "-")
-          .replace(/-$/, "")}.png`;
-      }
-    };
+      const renameThumbnailName = () => {
+        if (url.replace(`${crawlUrl}`, "") === "") {
+          thumbnailName = `${url
+            .replace(`${crawlUrl}`, "top")
+            .replace("#", "")
+            .replace(/\//g, "-")
+            .replace(/-$/, "")}.png`;
+        } else {
+          thumbnailName = `${url
+            .replace(`${crawlUrl}`, "")
+            .replace("#", "")
+            .replace(/\//g, "-")
+            .replace(/-$/, "")}.png`;
+        }
+      };
 
-    renameThumbnailName();
-    const thumbnailPath = path.join(thumbnailFolder, thumbnailName);
+      renameThumbnailName();
+      const thumbnailPath = path.join(thumbnailFolder, thumbnailName);
 
-    // Check if the file already exists
-    await page.waitForLoadState("networkidle");
+      // Check if the file already exists
+      await page.waitForLoadState("networkidle");
 
-    // take a screenshot of the page
-    const image = await page.screenshot({ path: thumbnailPath });
+      // take a screenshot of the page
+      const image = await page.screenshot({ path: thumbnailPath });
+      const supabaseImagePath = await uploadToSupabase(
+        `${userId}-${thumbnailName}`,
+        image
+      );
 
-    const supabaseImagePath = await uploadToSupabase(thumbnailName, image);
+      await pushData({
+        title,
+        url,
+        thumbnailPath: supabaseImagePath,
+      });
+    },
+  });
 
-    await pushData({
-      title,
-      url,
-      thumbnailPath: supabaseImagePath,
-    });
-  },
-});
+  await crawler.run([siteUrl]);
+};
 
 /***************************************************************************************
  * Open the dataset and save the result of the map to the default Key-value store
  ***************************************************************************************/
-const migration = async (userId: string) => {
+const migration = async (userId: string, siteUrl: string) => {
   const dataset = await Dataset.open<{
     url: string;
     title: string;
@@ -185,7 +190,7 @@ const migration = async (userId: string) => {
   await KeyValueStore.setValue("site_tree", result);
 
   try {
-    await insertCrawlData(userId, result);
+    await insertCrawlData(userId, siteUrl, result);
   } catch (err) {
     console.error(err);
   }
@@ -200,7 +205,7 @@ const uploadToSupabase = async (fileName: string, image: Buffer) => {
   console.log(`Uploading image ${fileName} to Supabase storage...`);
   const { data, error } = await supabase.storage
     .from("thumbnail")
-    .upload(`public/${fileName}`, image, {
+    .upload(`private/${fileName}`, image, {
       cacheControl: "3600",
       upsert: false,
     });
@@ -213,10 +218,12 @@ const uploadToSupabase = async (fileName: string, image: Buffer) => {
   return data.path;
 };
 
-const insertCrawlData = async (userId: string, data: any) => {
+const insertCrawlData = async (userId: string, siteUrl: string, data: any) => {
   const { data: crawlData, error } = await supabase.from("crawl_data").insert({
     user_id: userId,
+    site_url: siteUrl,
     json_data: data,
+    thumbnail_path: extractFirstThumbnailPath(data),
   });
 
   if (error) {
@@ -226,13 +233,30 @@ const insertCrawlData = async (userId: string, data: any) => {
   return crawlData;
 };
 
+const extractFirstThumbnailPath = (obj: any): string | null => {
+  if (obj.hasOwnProperty("thumbnailPath")) {
+    return obj.thumbnailPath;
+  }
+
+  for (let key in obj) {
+    if (typeof obj[key] === "object" && obj[key] !== null) {
+      const result = extractFirstThumbnailPath(obj[key]);
+      if (result !== null) {
+        return result;
+      }
+    }
+  }
+
+  return null;
+};
+
 /****************************************
  * Main crawl function
  ****************************************/
 export const runCrawl = async (userId: string, siteUrl: string) => {
-  crawlUrl = siteUrl.toString();
-  await crawler.run([siteUrl]);
-  const result = migration(userId);
+  // crawlUrl = siteUrl.toString();
+  await mainCrawl(userId, siteUrl);
+  const result = migration(userId, siteUrl);
 
   return result;
 };
