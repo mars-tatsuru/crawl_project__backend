@@ -35,6 +35,8 @@ server.get("/test", async (request: any, reply: any) => {
 // crawl API
 server.get("/crawl", async (request: any, reply: any) => {
   const { userId, siteUrl } = request.query;
+  console.log("userId:", userId);
+  console.log("siteUrl:", siteUrl);
 
   // Run the crawler and process the data
   let result;

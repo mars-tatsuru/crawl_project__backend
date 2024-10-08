@@ -23,24 +23,24 @@ const env = load(
 // Create a single supabase client for interacting with your database
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
-// URL to crawl
-let crawlUrl = "";
-
 /****************************************
  * crawler settings
  ****************************************/
 const urls: string[] = [];
 import path from "path";
+const MAX_RETRIES = 3;
 
 const mainCrawl = async (userId: string, siteUrl: string) => {
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
     maxRequestsPerCrawl: 20,
+    // timeoutSecs
+    // navigationTimeoutSecs: 60,
 
     async requestHandler({ request, page, enqueueLinks, log, pushData }) {
       // Log the URL of the page being crawled
       log.info(`crawling ${request.url}...`);
-
+      log.info(`retry count: ${request.retryCount}`);
       // https://crawlee.dev/api/core/function/enqueueLinks
       await enqueueLinks({
         strategy: EnqueueStrategy.SameOrigin,
@@ -54,21 +54,22 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       // Save the page data to the dataset
       const title = await page.title();
       const url = page.url();
+      const hostName = new URL(url).hostname;
 
       // Capture the screenshot of the page
       const thumbnailFolder = path.join("screenshots");
       let thumbnailName = "";
 
       const renameThumbnailName = () => {
-        if (url.replace(`${crawlUrl}`, "") === "") {
+        if (url.replace(`${siteUrl}`, "") === "") {
           thumbnailName = `${url
-            .replace(`${crawlUrl}`, "top")
+            .replace(`${siteUrl}`, "top")
             .replace("#", "")
             .replace(/\//g, "-")
             .replace(/-$/, "")}.png`;
         } else {
           thumbnailName = `${url
-            .replace(`${crawlUrl}`, "")
+            .replace(`${siteUrl}`, "")
             .replace("#", "")
             .replace(/\//g, "-")
             .replace(/-$/, "")}.png`;
@@ -78,13 +79,13 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       renameThumbnailName();
       const thumbnailPath = path.join(thumbnailFolder, thumbnailName);
 
-      // Check if the file already exists
-      await page.waitForLoadState("networkidle");
+      // TODO:Check if the file already exists but this is cause of the time out error
+      // await page.waitForLoadState("networkidle");
 
       // take a screenshot of the page
       const image = await page.screenshot({ path: thumbnailPath });
       const supabaseImagePath = await uploadToSupabase(
-        `${userId}-${thumbnailName}`,
+        `${userId}-${hostName}-${thumbnailName}`,
         image
       );
 
@@ -135,7 +136,7 @@ const migration = async (userId: string, siteUrl: string) => {
   let pathParts: string[][] = [];
   sortDataSetObjArr.map((value) => {
     const path = value.url
-      .replace(crawlUrl, "")
+      .replace(siteUrl, "")
       .split("/")
       .filter((v) => v);
 
@@ -254,7 +255,7 @@ const extractFirstThumbnailPath = (obj: any): string | null => {
  * Main crawl function
  ****************************************/
 export const runCrawl = async (userId: string, siteUrl: string) => {
-  // crawlUrl = siteUrl.toString();
+  // siteUrl = siteUrl.toString();
   await mainCrawl(userId, siteUrl);
   const result = migration(userId, siteUrl);
 
