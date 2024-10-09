@@ -62,13 +62,14 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       const thumbnailPath = path.join(thumbnailFolder, thumbnailName);
 
       // TODO:Check if the file already exists but this is cause of the time out error
-      // await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("networkidle");
 
       // take a screenshot of the page
       const image = await page.screenshot({ path: thumbnailPath });
       const supabaseImagePath = await uploadToSupabase(
         userId,
-        `${hostName}-${thumbnailName}`,
+        hostName,
+        thumbnailName,
         image
       );
 

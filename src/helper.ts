@@ -25,13 +25,14 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, {
  ****************************************/
 export const uploadToSupabase = async (
   userId: string,
-  fileName: string,
+  hostName: string,
+  thumbnailName: string,
   image: Buffer
 ) => {
-  console.log(`Uploading image ${fileName} to Supabase storage...`);
+  console.log(`Uploading image ${hostName} to Supabase storage...`);
   const { data, error } = await supabase.storage
     .from("thumbnail")
-    .upload(`private/${userId}/${fileName}`, image, {
+    .upload(`private/${userId}/${hostName}/${thumbnailName}`, image, {
       cacheControl: "3600",
       upsert: false,
       contentType: "image/*",
