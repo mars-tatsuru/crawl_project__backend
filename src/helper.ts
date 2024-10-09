@@ -21,7 +21,7 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY, {
 });
 
 /****************************************
- * uploadToSupabase
+ * uploadToSupabase from the second time onwards
  ****************************************/
 export const uploadToSupabase = async (
   userId: string,
