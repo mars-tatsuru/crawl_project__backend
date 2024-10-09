@@ -3,33 +3,15 @@ import {
   EnqueueStrategy,
   Dataset,
   KeyValueStore,
+  purgeDefaultStorages,
+  RequestQueue,
 } from "crawlee";
-
-// use ts-dotenv to load environment variables
-import { load } from "ts-dotenv";
-
-// Import supabase client
-import { createClient } from "@supabase/supabase-js";
-
-// Load environment variables from .env.local file
-const env = load(
-  {
-    SUPABASE_URL: String,
-    SUPABASE_KEY: String,
-  },
-  { path: ".env.local" }
-);
-
-// Create a single supabase client for interacting with your database
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
+import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
+import path from "path";
 
 /****************************************
  * crawler settings
  ****************************************/
-const urls: string[] = [];
-import path from "path";
-const MAX_RETRIES = 3;
-
 const mainCrawl = async (userId: string, siteUrl: string) => {
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
@@ -85,7 +67,8 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       // take a screenshot of the page
       const image = await page.screenshot({ path: thumbnailPath });
       const supabaseImagePath = await uploadToSupabase(
-        `${userId}-${hostName}-${thumbnailName}`,
+        userId,
+        `${hostName}-${thumbnailName}`,
         image
       );
 
@@ -199,65 +182,34 @@ const migration = async (userId: string, siteUrl: string) => {
   return result;
 };
 
-/*********************
- * HELPER FUNCTIONS
- *********************/
-const uploadToSupabase = async (fileName: string, image: Buffer) => {
-  console.log(`Uploading image ${fileName} to Supabase storage...`);
-  const { data, error } = await supabase.storage
-    .from("thumbnail")
-    .upload(`private/${fileName}`, image, {
-      cacheControl: "3600",
-      upsert: false,
-    });
-
-  if (error) {
-    console.error("Error uploading file:", error);
-    throw error;
-  }
-
-  return data.path;
-};
-
-const insertCrawlData = async (userId: string, siteUrl: string, data: any) => {
-  const { data: crawlData, error } = await supabase.from("crawl_data").insert({
-    user_id: userId,
-    site_url: siteUrl,
-    json_data: data,
-    thumbnail_path: extractFirstThumbnailPath(data),
-  });
-
-  if (error) {
-    console.error("Error inserting data:", error);
-  }
-
-  return crawlData;
-};
-
-const extractFirstThumbnailPath = (obj: any): string | null => {
-  if (obj.hasOwnProperty("thumbnailPath")) {
-    return obj.thumbnailPath;
-  }
-
-  for (let key in obj) {
-    if (typeof obj[key] === "object" && obj[key] !== null) {
-      const result = extractFirstThumbnailPath(obj[key]);
-      if (result !== null) {
-        return result;
-      }
-    }
-  }
-
-  return null;
-};
-
 /****************************************
  * Main crawl function
  ****************************************/
 export const runCrawl = async (userId: string, siteUrl: string) => {
-  // siteUrl = siteUrl.toString();
-  await mainCrawl(userId, siteUrl);
-  const result = migration(userId, siteUrl);
+  try {
+    // 1.For second crawl, clear all storages
+    await clearAllStorages(
+      purgeDefaultStorages,
+      KeyValueStore,
+      RequestQueue,
+      Dataset
+    );
 
-  return result;
+    // 2.Run the main crawl
+    await mainCrawl(userId, siteUrl);
+
+    // 3.Run the migration
+    const result = await migration(userId, siteUrl);
+
+    // 4.Return the result of the migration
+    return result;
+  } catch (error) {
+    // Log the error
+    console.error("Error in runCrawl:", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    throw error;
+  }
 };
