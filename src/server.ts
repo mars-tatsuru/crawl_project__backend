@@ -5,7 +5,10 @@ import { runCrawl } from "./main";
 
 const server = fastify();
 server.register(cors, {
-  origin: "*",
+  // origin: true,
+  origin: ["http://localhost:3000"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // credentials: true,
 });
 server.register(multiPart, {
   attachFieldsToBody: "keyValues",
