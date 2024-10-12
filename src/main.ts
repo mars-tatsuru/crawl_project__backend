@@ -105,6 +105,7 @@ const migration = async (userId: string, siteUrl: string) => {
 
   // for object array sorting and
   //ja , ja/about , en , en/about
+  // TODO: https://nodejs.org/api/url.html
   const sortDataSetObjArr = dataSetObjArr
     .filter(
       (value, index, self) =>
