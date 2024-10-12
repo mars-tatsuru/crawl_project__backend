@@ -5,6 +5,7 @@ import {
   KeyValueStore,
   purgeDefaultStorages,
   RequestQueue,
+  RetryRequestError,
 } from "crawlee";
 import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
 import path from "path";
@@ -16,13 +17,14 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
     maxRequestsPerCrawl: 20,
+    maxRequestRetries: 3,
     // timeoutSecs
     // navigationTimeoutSecs: 60,
 
     async requestHandler({ request, page, enqueueLinks, log, pushData }) {
       // Log the URL of the page being crawled
       log.info(`crawling ${request.url}...`);
-      log.info(`retry count: ${request.retryCount}`);
+
       // https://crawlee.dev/api/core/function/enqueueLinks
       await enqueueLinks({
         strategy: EnqueueStrategy.SameOrigin,
@@ -78,6 +80,10 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
         url,
         thumbnailPath: supabaseImagePath,
       });
+    },
+
+    failedRequestHandler: async ({ request, log }) => {
+      log.info(`Request ${request.url} failed ${request.retryCount} times`);
     },
   });
 
