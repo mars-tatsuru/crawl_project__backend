@@ -10,6 +10,11 @@ import {
 import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
 import path from "path";
 
+// removeQueryParams function is used to remove query parameters from the URL
+const removeQueryParams = (url: string) => {
+  return url.split("?")[0];
+};
+
 /****************************************
  * crawler settings
  ****************************************/
@@ -29,6 +34,8 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       await enqueueLinks({
         strategy: EnqueueStrategy.SameOrigin,
         transformRequestFunction(req) {
+          //remove query parameters from the URL
+          req.url = removeQueryParams(req.url);
           // ignore all links ending with `.pdf`
           if (req.url.endsWith(".pdf")) return false;
           return req;
