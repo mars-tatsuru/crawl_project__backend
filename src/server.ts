@@ -8,7 +8,7 @@ server.register(cors, {
   // origin: true,
   origin: ["http://localhost:3000", "https://saas-project-khaki.vercel.app/"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  // credentials: true,
+  credentials: true,
 });
 server.register(multiPart, {
   attachFieldsToBody: "keyValues",
