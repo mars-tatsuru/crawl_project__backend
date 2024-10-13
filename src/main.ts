@@ -148,6 +148,7 @@ const migration = async (userId: string, siteUrl: string) => {
   pathParts.map((parts, index) => {
     let obj: { [key: string]: any } = result;
 
+    // TODO: Think necessary or not.
     // if the path is empty, add "top" to the path
     if (parts.filter((part) => part !== "top") && parts.length === 0) {
       parts.push("top");
