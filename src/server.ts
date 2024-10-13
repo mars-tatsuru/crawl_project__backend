@@ -41,6 +41,8 @@ server.get("/crawl", async (request: any, reply: any) => {
   console.log("userId:", userId);
   console.log("siteUrl:", siteUrl);
 
+  reply.send("Crawl API requested");
+
   // Run the crawler and process the data
   let result;
   try {
