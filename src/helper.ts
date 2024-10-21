@@ -52,14 +52,40 @@ export const uploadToSupabase = async (
 export const insertCrawlData = async (
   userId: string,
   siteUrl: string,
-  data: any
+  data?: any
 ) => {
-  const { data: crawlData, error } = await supabase.from("crawl_data").insert({
-    user_id: userId,
-    site_url: siteUrl,
-    json_data: data,
-    thumbnail_path: extractFirstThumbnailPath(data),
-  });
+  // insert only site_url and user_id
+  if (!data) {
+    const { data: crawlData, error } = await supabase
+      .from("crawl_data")
+      .insert({
+        user_id: userId,
+        site_url: siteUrl,
+      })
+      .single();
+
+    if (error) {
+      console.error("Error inserting data:", error);
+    }
+
+    return crawlData;
+  }
+
+  console.log(userId);
+  console.log(siteUrl);
+  console.log(extractFirstThumbnailPath(data));
+
+  const { data: crawlData, error } = await supabase
+    .from("crawl_data")
+    .update({
+      json_data: data,
+      thumbnail_path: extractFirstThumbnailPath(data),
+    })
+    .match({
+      user_id: userId,
+      site_url: siteUrl,
+    })
+    .select();
 
   if (error) {
     console.error("Error inserting data:", error);
