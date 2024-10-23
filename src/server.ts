@@ -9,7 +9,7 @@ import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
 const server = fastify();
 server.register(cors, {
   // origin: true,
-  origin: ["http://localhost:3000", "https://saas-project-khaki.vercel.app/"],
+  origin: ["http://localhost:3000", "https://saas-project-khaki.vercel.app"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
 });
