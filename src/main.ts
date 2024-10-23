@@ -19,9 +19,6 @@ const removeQueryParams = (url: string) => {
  * crawler settings
  ****************************************/
 const mainCrawl = async (userId: string, siteUrl: string) => {
-  //TODO: for skelton card data
-  await insertCrawlData(userId, siteUrl);
-
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
     maxRequestsPerCrawl: 20,
