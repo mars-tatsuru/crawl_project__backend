@@ -7,10 +7,15 @@ import {
   RequestQueue,
   RetryRequestError,
 } from "crawlee";
-import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
+import {
+  uploadToSupabase,
+  insertCrawlData,
+  clearAllStorages,
+} from "./supabaseHelper";
+import { createThumbnailFolderAndRename } from "./crawlHelper";
 import path from "path";
 
-// removeQueryParams function is used to remove query parameters from the URL
+// removeQueryParams
 const removeQueryParams = (url: string) => {
   return url.split("?")[0];
 };
@@ -21,60 +26,48 @@ const removeQueryParams = (url: string) => {
 const mainCrawl = async (userId: string, siteUrl: string) => {
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
+    // navigationTimeoutSecs: 60,
     maxRequestsPerCrawl: 20,
     maxRequestRetries: 3,
-    // timeoutSecs
-    // navigationTimeoutSecs: 60,
 
+    // MAIN FUNCTION. Request queue configuration
     async requestHandler({ request, page, enqueueLinks, log, pushData }) {
       // Log the URL of the page being crawled
       log.info(`crawling ${request.url}...`);
 
       // https://crawlee.dev/api/core/function/enqueueLinks
       await enqueueLinks({
+        // confirm that the URL is the same origin as the site
         strategy: EnqueueStrategy.SameOrigin,
+
+        // remove query parameters from the URL.
+        // ignore all links ending with `.pdf`
         transformRequestFunction(req) {
-          //remove query parameters from the URL
           req.url = removeQueryParams(req.url);
-          // ignore all links ending with `.pdf`
           if (req.url.endsWith(".pdf")) return false;
           return req;
         },
       });
+
+      // TODO:Check if the file already exists but this is cause of the time out error
+      // await page.waitForLoadState("networkidle");
 
       // Save the page data to the dataset
       const title = await page.title();
       const url = page.url();
       const hostName = new URL(url).hostname;
 
-      // Capture the screenshot of the page
-      const thumbnailFolder = path.join("screenshots");
-      let thumbnailName = "";
+      // create the thumbnail folder and rename the file. from crawlHelper.ts
+      const { thumbnailFolder, thumbnailName } =
+        await createThumbnailFolderAndRename(url, siteUrl);
 
-      const renameThumbnailName = () => {
-        if (url.replace(`${siteUrl}`, "") === "") {
-          thumbnailName = `${url
-            .replace(`${siteUrl}`, "top")
-            .replace("#", "")
-            .replace(/\//g, "-")
-            .replace(/-$/, "")}.png`;
-        } else {
-          thumbnailName = `${url
-            .replace(`${siteUrl}`, "")
-            .replace("#", "")
-            .replace(/\//g, "-")
-            .replace(/-$/, "")}.png`;
-        }
-      };
-
-      renameThumbnailName();
+      // create the thumbnail path
       const thumbnailPath = path.join(thumbnailFolder, thumbnailName);
-
-      // TODO:Check if the file already exists but this is cause of the time out error
-      // await page.waitForLoadState("networkidle");
 
       // take a screenshot of the page
       const image = await page.screenshot({ path: thumbnailPath });
+
+      // upload the screenshot to the Supabase storage
       const supabaseImagePath = await uploadToSupabase(
         userId,
         hostName,
@@ -82,6 +75,7 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
         image
       );
 
+      // push the data to the dataset
       await pushData({
         title,
         url,
@@ -89,6 +83,7 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
       });
     },
 
+    // error handling
     failedRequestHandler: async ({ request, log }) => {
       log.info(`Request ${request.url} failed ${request.retryCount} times`);
     },

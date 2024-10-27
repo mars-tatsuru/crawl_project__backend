@@ -4,7 +4,11 @@ import multiPart from "@fastify/multipart";
 import cors from "@fastify/cors";
 import { runCrawl } from "./main";
 import Queue from "better-queue";
-import { uploadToSupabase, insertCrawlData, clearAllStorages } from "./helper";
+import {
+  uploadToSupabase,
+  insertCrawlData,
+  clearAllStorages,
+} from "./supabaseHelper";
 
 const server = fastify();
 server.register(cors, {
