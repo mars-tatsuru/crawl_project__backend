@@ -1,9 +1,27 @@
+import {
+  PlaywrightCrawler,
+  EnqueueStrategy,
+  Dataset,
+  KeyValueStore,
+  purgeDefaultStorages,
+  RequestQueue,
+  RetryRequestError,
+} from "crawlee";
 import { createClient } from "@supabase/supabase-js";
 import { load } from "ts-dotenv";
 import path from "path";
 
 /****************************************
- * setup supabase
+ * type DatasetObj
+ ****************************************/
+export type DatasetObj = {
+  url: string;
+  title: string;
+  thumbnailPath: string;
+};
+
+/****************************************
+ * thumbnailFolder and thumbnailName
  ****************************************/
 let thumbnailFolder = "";
 let thumbnailName = "";
@@ -32,4 +50,13 @@ export const createThumbnailFolderAndRename = async (
     thumbnailFolder,
     thumbnailName,
   };
+};
+
+/****************************************
+ * sort sitemap data
+ ****************************************/
+export const dataSort = async (dataset: DatasetObj[]) => {
+  return dataset.sort((a: any, b: any) => {
+    return a.url.split("/").length - b.url.split("/").length;
+  });
 };

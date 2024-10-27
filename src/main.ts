@@ -12,7 +12,8 @@ import {
   insertCrawlData,
   clearAllStorages,
 } from "./supabaseHelper";
-import { createThumbnailFolderAndRename } from "./crawlHelper";
+import { createThumbnailFolderAndRename, dataSort } from "./crawlHelper";
+import type { DatasetObj } from "./crawlHelper";
 import path from "path";
 
 // removeQueryParams
@@ -95,102 +96,71 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
 /***************************************************************************************
  * Open the dataset and save the result of the map to the default Key-value store
  ***************************************************************************************/
-const migration = async (userId: string, siteUrl: string) => {
-  const dataset = await Dataset.open<{
-    url: string;
-    title: string;
-    thumbnailPath: string;
-  }>();
+const formatCrawlData = async (userId: string, siteUrl: string) => {
+  const dataset = await Dataset.open<DatasetObj>();
+  const dataSetArr = await dataset.map(({ url, title, thumbnailPath }) => ({
+    url,
+    title,
+    thumbnailPath,
+  }));
 
-  // calling reduce function and using memo to calculate number of headers
-  const dataSetObjArr = await dataset.map((value) => {
-    return {
-      url: value.url,
-      title: value.title,
-      thumbnailPath: value.thumbnailPath,
-    };
-  });
+  // Sort the data by the length of the URL
+  const sortedData = await dataSort(dataSetArr);
 
-  // for object array sorting and
-  //ja , ja/about , en , en/about
-  // TODO: https://nodejs.org/api/url.html
-  const sortDataSetObjArr = dataSetObjArr
-    .filter(
-      (value, index, self) =>
-        self.findIndex((v) => v.url === value.url) === index
-    )
-    .sort((a, b) => {
-      return a.url.length - b.url.length;
-    })
-    .sort((a, b) => a.url.split("/").length - b.url.split("/").length);
+  // build the site tree
+  const buildSiteTree = (data: DatasetObj[]) => {
+    const result: Record<string, any> = {};
 
-  // ex) https://www.marsflag.com/ja/ => [ 'ja' ]
-  // sort the pathParts array by length and parent-child relationship
-  let pathParts: string[][] = [];
-  sortDataSetObjArr.map((value) => {
-    const path = value.url
-      .replace(siteUrl, "")
-      .split("/")
-      .filter((v) => v);
+    data.forEach(({ url, title, thumbnailPath }) => {
+      // get the parts of the URL
+      // 例: https://example.com/foo/bar/baz -> ["foo", "bar", "baz"]
+      let parts = url.replace(siteUrl, "").split("/").filter(Boolean);
 
-    pathParts.push(path);
-  });
-
-  // return the result of the map to the default Key-value store
-  const result = {};
-
-  // create site tree data
-  pathParts.map((parts, index) => {
-    let obj: { [key: string]: any } = result;
-
-    // TODO: Think necessary or not.
-    // if the path is empty, add "top" to the path
-    if (parts.filter((part) => part !== "top") && parts.length === 0) {
-      parts.push("top");
-    }
-
-    // if the path is not starting with "top", add "top" to the path
-    if (parts.length >= 1 && parts[0] !== "top") {
-      parts.unshift("top");
-    }
-
-    // create site tree data
-    parts.map((part, partOrder) => {
-      if (!obj[part]) {
-        // If partOrder is the last index of parts, add the url, title, and thumbnailPath
-        if (partOrder === parts.length - 1) {
-          obj[part] = {
-            url: sortDataSetObjArr[index].url,
-            title: sortDataSetObjArr[index].title,
-            thumbnailPath: sortDataSetObjArr[index].thumbnailPath,
-            level: parts.length - 1,
-          };
-        } else {
-          if (part === "top") {
-            obj[part] = {};
-          } else {
-            obj[part] = {
-              title: part,
-              url: parts.slice(0, partOrder + 1).join("/"),
-              level: parts.length - 2,
-            };
-          }
-        }
+      // when the URL is the top page
+      if (parts.length === 0 || parts[0] !== "top") {
+        parts = ["top", ...parts];
       }
-      obj = obj[part];
-    });
-  });
 
-  // saving result of map to default Key-value store
-  await KeyValueStore.setValue("site_tree", result);
+      let current = result;
+
+      // create the site tree
+      parts.forEach((part, index) => {
+        const isLastPart = index === parts.length - 1;
+
+        if (!current[part]) {
+          current[part] = isLastPart
+            ? {
+                url,
+                title,
+                thumbnailPath,
+                level: parts.length - 1,
+              }
+            : part === "top"
+            ? {}
+            : {
+                url: parts.slice(0, index + 1).join("/"),
+                title: part,
+                level: parts.length - 2,
+              };
+        }
+
+        current = current[part];
+      });
+    });
+
+    return result;
+  };
+
+  const siteTree = buildSiteTree(sortedData);
 
   try {
-    await insertCrawlData(userId, siteUrl, result);
+    await KeyValueStore.setValue("site_tree", siteTree);
+    await insertCrawlData(userId, siteUrl, siteTree);
   } catch (err) {
     console.error(err);
   }
 
-  return result;
+  return siteTree;
 };
 
 /****************************************
@@ -209,10 +179,10 @@ export const runCrawl = async (userId: string, siteUrl: string) => {
     // 2.Run the main crawl
     await mainCrawl(userId, siteUrl);
 
-    // 3.Run the migration
-    const result = await migration(userId, siteUrl);
+    // 3.Run the formatCrawlData
+    const result = await formatCrawlData(userId, siteUrl);
 
-    // 4.Return the result of the migration
+    // 4.Return the result of the formatCrawlData
     return result;
   } catch (error) {
     // Log the error
