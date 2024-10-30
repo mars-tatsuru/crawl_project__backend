@@ -32,6 +32,7 @@ type CrawlTaskStatus = {
   id: string;
   userId: string;
   siteUrl: string;
+  numberOfCrawlPage?: string;
   status: "queued" | "processing" | "completed" | "error";
   progress?: number;
   result?: any;
@@ -44,6 +45,7 @@ type CrawlTask = {
   taskId: string;
   userId: string;
   siteUrl: string;
+  numberOfCrawlPage?: string;
 };
 
 const crawlTasks = new Map<string, CrawlTaskStatus>();
@@ -68,7 +70,7 @@ function generateTaskId(): string {
 // create a crawling queue
 const crawlQueue = new Queue<CrawlTask>(
   async (task, cb) => {
-    const { taskId, userId, siteUrl } = task;
+    const { taskId, userId, siteUrl, numberOfCrawlPage } = task;
 
     try {
       // update the task status to processing
@@ -78,7 +80,7 @@ const crawlQueue = new Queue<CrawlTask>(
       });
 
       // conduct the crawl
-      const result = await runCrawl(userId, siteUrl);
+      const result = await runCrawl(userId, siteUrl, numberOfCrawlPage);
 
       // update the task status to completed
       updateTaskStatus(taskId, {
@@ -120,13 +122,18 @@ server.listen({ port: 8000, host: "0.0.0.0" }, (err, address) => {
  * ENDPOINTS
  *******************************************************/
 // Crawl endpoint
-server.get("/crawl", async (request: FastifyRequest, reply: FastifyReply) => {
-  const { userId, siteUrl } = request.query as {
-    userId: string;
+server.post("/crawl", async (request: FastifyRequest, reply: FastifyReply) => {
+  const { siteUrl, userId, numberOfCrawlPage } = request.body as {
     siteUrl: string;
+    userId: string;
+    numberOfCrawlPage?: string; // the number of pages to crawl
   };
 
-  await insertCrawlData(userId, siteUrl);
+  await insertCrawlData({
+    userId,
+    siteUrl,
+    numberOfCrawlPage: numberOfCrawlPage,
+  });
 
   // パラメータのバリデーション
   if (!userId || !siteUrl) {
@@ -143,6 +150,7 @@ server.get("/crawl", async (request: FastifyRequest, reply: FastifyReply) => {
     id: taskId,
     userId,
     siteUrl,
+    numberOfCrawlPage,
     status: "queued",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -154,6 +162,7 @@ server.get("/crawl", async (request: FastifyRequest, reply: FastifyReply) => {
     taskId,
     userId,
     siteUrl,
+    numberOfCrawlPage,
   });
 
   // タスクIDと初期状態を返す

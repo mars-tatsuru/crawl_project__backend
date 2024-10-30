@@ -24,11 +24,18 @@ const removeQueryParams = (url: string) => {
 /****************************************
  * crawler settings
  ****************************************/
-const mainCrawl = async (userId: string, siteUrl: string) => {
+const mainCrawl = async (
+  userId: string,
+  siteUrl: string,
+  numberOfCrawlPage?: string
+) => {
+  // count the number of crawled pages
+  let numberOfCrawledPage = 0;
+
   const crawler = new PlaywrightCrawler({
     // Limitation: https://crawlee.dev/api/playwright-crawler/interface/PlaywrightCrawlerOptions#maxRequestsPerCrawl
     // navigationTimeoutSecs: 60,
-    maxRequestsPerCrawl: 20,
+    maxRequestsPerCrawl: numberOfCrawlPage ? Number(numberOfCrawlPage) : 10,
     maxRequestRetries: 3,
 
     // MAIN FUNCTION. Request queue configuration
@@ -81,6 +88,14 @@ const mainCrawl = async (userId: string, siteUrl: string) => {
         title,
         url,
         thumbnailPath: supabaseImagePath,
+      });
+
+      // Check if the number of crawled pages exceeds the limit
+      numberOfCrawledPage += 1;
+      await insertCrawlData({
+        userId,
+        siteUrl,
+        numberOfCrawledPage: String(numberOfCrawledPage),
       });
     },
 
@@ -155,7 +170,11 @@ const formatCrawlData = async (userId: string, siteUrl: string) => {
 
   try {
     await KeyValueStore.setValue("site_tree", siteTree);
-    await insertCrawlData(userId, siteUrl, siteTree);
+    await insertCrawlData({
+      userId,
+      siteUrl,
+      data: siteTree,
+    });
   } catch (err) {
     console.error(err);
   }
@@ -166,7 +185,11 @@ const formatCrawlData = async (userId: string, siteUrl: string) => {
 /****************************************
  * Main crawl function
  ****************************************/
-export const runCrawl = async (userId: string, siteUrl: string) => {
+export const runCrawl = async (
+  userId: string,
+  siteUrl: string,
+  numberOfCrawlPage?: string
+) => {
   try {
     // 1.For second crawl, clear all storages
     await clearAllStorages(
@@ -177,7 +200,7 @@ export const runCrawl = async (userId: string, siteUrl: string) => {
     );
 
     // 2.Run the main crawl
-    await mainCrawl(userId, siteUrl);
+    await mainCrawl(userId, siteUrl, numberOfCrawlPage);
 
     // 3.Run the formatCrawlData
     const result = await formatCrawlData(userId, siteUrl);

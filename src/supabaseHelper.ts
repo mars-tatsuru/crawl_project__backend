@@ -49,18 +49,27 @@ export const uploadToSupabase = async (
 /****************************************
  * insertCrawlData
  ****************************************/
-export const insertCrawlData = async (
-  userId: string,
-  siteUrl: string,
-  data?: any
-) => {
-  // insert only site_url and user_id
-  if (!data) {
+export const insertCrawlData = async ({
+  userId,
+  siteUrl,
+  data,
+  numberOfCrawlPage,
+  numberOfCrawledPage,
+}: {
+  userId: string;
+  siteUrl: string;
+  data?: any;
+  numberOfCrawlPage?: string;
+  numberOfCrawledPage?: string;
+}) => {
+  // Insert any data other than data
+  if (!data && !numberOfCrawledPage) {
     const { data: crawlData, error } = await supabase
       .from("crawl_data")
       .insert({
         user_id: userId,
         site_url: siteUrl,
+        number_of_crawl_page: numberOfCrawlPage,
       })
       .single();
 
@@ -71,9 +80,24 @@ export const insertCrawlData = async (
     return crawlData;
   }
 
-  console.log(userId);
-  console.log(siteUrl);
-  console.log(extractFirstThumbnailPath(data));
+  if (!data && numberOfCrawledPage) {
+    const { data: crawlData, error } = await supabase
+      .from("crawl_data")
+      .update({
+        number_of_crawled_page: numberOfCrawledPage,
+      })
+      .match({
+        user_id: userId,
+        site_url: siteUrl,
+      })
+      .select();
+
+    if (error) {
+      console.error("Error inserting data:", error);
+    }
+
+    return crawlData;
+  }
 
   const { data: crawlData, error } = await supabase
     .from("crawl_data")
