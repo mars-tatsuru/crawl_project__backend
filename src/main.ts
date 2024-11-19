@@ -15,6 +15,8 @@ import {
 import { createThumbnailFolderAndRename, dataSort } from "./crawlHelper";
 import type { DatasetObj } from "./crawlHelper";
 import path from "path";
+import { load } from "ts-dotenv";
+import { BetaAnalyticsDataClient } from "@google-analytics/data";
 
 // removeQueryParams
 const removeQueryParams = (url: string) => {
@@ -26,7 +28,7 @@ const removeQueryParams = (url: string) => {
  ****************************************/
 const mainCrawl = async (
   userId: string,
-  siteUrl: string,
+  siteUrl: string, // TODO: どこのページをtopして認識させるか or リダイレクト前のURLをtopとするか or その他(言語設定)
   numberOfCrawlPage?: string
 ) => {
   // count the number of crawled pages
@@ -59,6 +61,7 @@ const mainCrawl = async (
 
       // TODO:Check if the file already exists but this is cause of the time out error
       // await page.waitForLoadState("networkidle");
+      // await page.waitForTime(seconds: 1000);
 
       // Save the page data to the dataset
       const title = await page.title();
@@ -216,4 +219,51 @@ export const runCrawl = async (
     }
     throw error;
   }
+};
+
+/****************************************
+ * Get the analytics data
+ ****************************************/
+const env = load(
+  {
+    GOOGLE_APPLICATION_CREDENTIALS: String,
+  },
+  { path: ".env.local" }
+);
+const analyticsDataClient = new BetaAnalyticsDataClient({
+  keyFilename: env.GOOGLE_APPLICATION_CREDENTIALS,
+});
+export const getAnalyticsData = async () => {
+  // const propertyId = "properties/315106443";
+  const propertyId = "properties/464702147";
+  const response = await analyticsDataClient.runReport({
+    property: propertyId,
+    dateRanges: [
+      {
+        startDate: "7daysAgo",
+        endDate: "yesterday",
+      },
+    ],
+    dimensions: [
+      {
+        name: "date",
+      },
+      {
+        name: "hostName",
+      },
+      {
+        name: "pagePathPlusQueryString",
+      },
+    ],
+    metrics: [
+      // {
+      //   name: "activeUsers",
+      // },
+      {
+        name: "screenPageViews",
+      },
+    ],
+  });
+
+  return response;
 };

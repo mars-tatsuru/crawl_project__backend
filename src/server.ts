@@ -2,7 +2,7 @@ import fastify from "fastify";
 import { FastifyReply, FastifyRequest } from "fastify";
 import multiPart from "@fastify/multipart";
 import cors from "@fastify/cors";
-import { runCrawl } from "./main";
+import { runCrawl, getAnalyticsData } from "./main";
 import Queue from "better-queue";
 import {
   uploadToSupabase,
@@ -225,6 +225,16 @@ server.post(
       message: "Crawl task has been cancelled",
       status: "cancelled",
     };
+  }
+);
+
+server.get(
+  "/analytics",
+  async (request: FastifyRequest, reply: FastifyReply) => {
+    const results = await getAnalyticsData();
+    console.log(results);
+
+    return results;
   }
 );
 
