@@ -137,6 +137,49 @@ const extractFirstThumbnailPath = (obj: any): string | null => {
 };
 
 /****************************************
+ * get Ga4 data
+ ****************************************/
+export const getGa4Data = async (paramsId: string) => {
+  const { data, error } = await supabase
+    .from("ga4_data")
+    .select("*")
+    .eq("id", paramsId);
+  if (error) {
+    console.error("Error getting data:", error);
+  }
+
+  return data;
+};
+
+/****************************************
+ * insert Ga4 data
+ ****************************************/
+export const insertGa4Data = async ({
+  paramsId,
+  data,
+}: {
+  paramsId: string;
+  data?: any;
+}) => {
+  const updates = {
+    id: paramsId,
+    analytics_data: data,
+  };
+
+  // update the user's profile
+  const { data: ga4Data, error } = await supabase
+    .from("ga4_data")
+    .upsert(updates)
+    .single();
+
+  if (error) {
+    console.error("Error inserting data:", error);
+  }
+
+  return ga4Data;
+};
+
+/****************************************
  * clearAllStorages
  ****************************************/
 export const clearAllStorages = async (

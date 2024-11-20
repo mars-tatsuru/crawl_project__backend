@@ -228,10 +228,14 @@ server.post(
   }
 );
 
-server.get(
+server.post(
   "/analytics",
   async (request: FastifyRequest, reply: FastifyReply) => {
-    const results = await getAnalyticsData();
+    const { paramsId } = request.body as {
+      paramsId: string;
+    };
+
+    const results = await getAnalyticsData(paramsId);
     console.log(results);
 
     return results;

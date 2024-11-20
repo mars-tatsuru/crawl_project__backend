@@ -10,10 +10,15 @@ import {
 import {
   uploadToSupabase,
   insertCrawlData,
+  getGa4Data,
+  insertGa4Data,
   clearAllStorages,
 } from "./supabaseHelper";
-import { createThumbnailFolderAndRename, dataSort } from "./crawlHelper";
-import type { DatasetObj } from "./crawlHelper";
+import {
+  createThumbnailFolderAndRename,
+  dataSort,
+  DatasetObj,
+} from "./crawlHelper";
 import path from "path";
 import { load } from "ts-dotenv";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
@@ -224,19 +229,28 @@ export const runCrawl = async (
 /****************************************
  * Get the analytics data
  ****************************************/
-const env = load(
-  {
-    GOOGLE_APPLICATION_CREDENTIALS: String,
-  },
-  { path: ".env.local" }
-);
-const analyticsDataClient = new BetaAnalyticsDataClient({
-  keyFilename: env.GOOGLE_APPLICATION_CREDENTIALS,
-});
-export const getAnalyticsData = async () => {
-  // const propertyId = "properties/315106443";
-  const propertyId = "properties/464702147";
-  const response = await analyticsDataClient.runReport({
+// const env = load(
+//   {
+//     GOOGLE_APPLICATION_CREDENTIALS: String,
+//   },
+//   { path: ".env.local" }
+// );
+export const getAnalyticsData = async (paramsId: string) => {
+  const ga4Data = await getGa4Data(paramsId);
+
+  const analyticsDataClient = new BetaAnalyticsDataClient({
+    // insert the path to the JSON key file
+    // keyFilename: ga4Data?.[0].json_key,
+
+    // insert the JSON key directly
+    credentials: ga4Data?.[0].json_key,
+  });
+
+  // ex) const propertyId = "properties/315106443";
+  // ex) const propertyId = "properties/399561128";
+  const propertyId = `properties/${ga4Data?.[0].property_id}`;
+
+  const data = await analyticsDataClient.runReport({
     property: propertyId,
     dateRanges: [
       {
@@ -265,5 +279,10 @@ export const getAnalyticsData = async () => {
     ],
   });
 
-  return response;
+  await insertGa4Data({
+    paramsId,
+    data,
+  });
+
+  return data;
 };
