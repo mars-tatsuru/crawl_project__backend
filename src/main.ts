@@ -254,8 +254,8 @@ export const getAnalyticsData = async (paramsId: string) => {
     property: propertyId,
     dateRanges: [
       {
-        startDate: "7daysAgo",
-        endDate: "yesterday",
+        startDate: "2021-01-01",
+        endDate: "today",
       },
     ],
     dimensions: [
