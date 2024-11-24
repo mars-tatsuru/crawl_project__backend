@@ -50,18 +50,39 @@ export const uploadToSupabase = async (
  * insertCrawlData
  ****************************************/
 export const insertCrawlData = async ({
+  id,
   userId,
   siteUrl,
   data,
   numberOfCrawlPage,
   numberOfCrawledPage,
 }: {
-  userId: string;
-  siteUrl: string;
+  id?: string;
+  userId?: string;
+  siteUrl?: string;
   data?: any;
   numberOfCrawlPage?: string;
   numberOfCrawledPage?: string;
 }) => {
+  if (id) {
+    console.log("Updating crawl data...", id);
+    const { data: crawlData, error } = await supabase
+      .from("crawl_data")
+      .update({
+        json_data: data,
+      })
+      .match({
+        id: id,
+      })
+      .select();
+
+    if (error) {
+      console.error("Error inserting data:", error);
+    }
+
+    return crawlData;
+  }
+
   // Insert any data other than data
   if (!data && !numberOfCrawledPage) {
     const { data: crawlData, error } = await supabase
@@ -177,6 +198,23 @@ export const insertGa4Data = async ({
   }
 
   return ga4Data;
+};
+
+/****************************************
+ * get crawl data
+ ****************************************/
+export const getSpecificCrawlData = async (paramsId: string) => {
+  const { data, error } = await supabase
+    .from("crawl_data")
+    .select("*")
+    .eq("id", paramsId);
+
+  if (error) {
+    console.error("Failed to fetch user data:", error);
+    return;
+  }
+
+  return data;
 };
 
 /****************************************

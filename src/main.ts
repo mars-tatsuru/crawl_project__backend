@@ -13,6 +13,7 @@ import {
   getGa4Data,
   insertGa4Data,
   clearAllStorages,
+  getSpecificCrawlData,
 } from "./supabaseHelper";
 import {
   createThumbnailFolderAndRename,
@@ -157,6 +158,7 @@ const formatCrawlData = async (userId: string, siteUrl: string) => {
                 title,
                 thumbnailPath,
                 level: parts.length - 1,
+                screenPageViews: null,
               }
             : part === "top"
             ? {}
@@ -164,6 +166,7 @@ const formatCrawlData = async (userId: string, siteUrl: string) => {
                 url: parts.slice(0, index + 1).join("/"),
                 title: part,
                 level: parts.length - 2,
+                screenPageViews: null,
               };
         }
 
@@ -250,7 +253,7 @@ export const getAnalyticsData = async (paramsId: string) => {
   // ex) const propertyId = "properties/399561128";
   const propertyId = `properties/${ga4Data?.[0].property_id}`;
 
-  const data = await analyticsDataClient.runReport({
+  const analyticsData = await analyticsDataClient.runReport({
     property: propertyId,
     dateRanges: [
       {
@@ -281,8 +284,78 @@ export const getAnalyticsData = async (paramsId: string) => {
 
   await insertGa4Data({
     paramsId,
-    data,
+    data: analyticsData,
   });
 
-  return data;
+  //TODO: 日付ごとにinsertできるようにする。
+  const crawlData = await getSpecificCrawlData(paramsId);
+  function updatePageViews(crawlData: any, analyticsData: any) {
+    // 早期リターンでバリデーション
+    if (!crawlData[0]) {
+      console.warn("crawlData is undefined or null");
+      return undefined;
+    }
+
+    if (
+      !analyticsData ||
+      !Array.isArray(analyticsData) ||
+      analyticsData.length === 0
+    ) {
+      console.warn("analyticsData is invalid");
+      return crawlData.json_data; // 元のデータをそのまま返す
+    }
+
+    const rows = analyticsData[0]?.rows;
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      console.warn("No rows found in analyticsData");
+      return crawlData.json_data;
+    }
+
+    const updatedCrawlData = JSON.parse(JSON.stringify(crawlData[0].json_data));
+
+    rows.forEach((row) => {
+      try {
+        if (!row.dimensionValues?.[2] || !row.metricValues?.[0]) {
+          console.warn("Invalid row structure:", row);
+          return;
+        }
+
+        const path = row.dimensionValues[2].value;
+        const pageViews = parseInt(row.metricValues[0].value);
+
+        if (!path || isNaN(pageViews)) {
+          console.warn(
+            `Invalid path or pageViews: path=${path}, pageViews=${pageViews}`
+          );
+          return;
+        }
+
+        console.info(`Processing: path=${path}, pageViews=${pageViews}`);
+
+        if (path === "/") {
+          if ("top" in updatedCrawlData) {
+            updatedCrawlData.top.screenPageViews = pageViews;
+            console.info(`Updated top page views: ${pageViews}`);
+          }
+        } else if (path in updatedCrawlData) {
+          updatedCrawlData[path].screenPageViews = pageViews;
+          console.info(`Updated page views for ${path}: ${pageViews}`);
+        } else {
+          console.warn(`Path not found in crawl data: ${path}`);
+        }
+      } catch (error) {
+        console.error(`Error processing row:`, error);
+      }
+    });
+
+    return updatedCrawlData;
+  }
+
+  const result = updatePageViews(crawlData, analyticsData);
+  await insertCrawlData({
+    id: paramsId,
+    data: result,
+  });
+
+  return crawlData;
 };
