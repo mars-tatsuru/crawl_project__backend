@@ -282,80 +282,139 @@ export const getAnalyticsData = async (paramsId: string) => {
     ],
   });
 
+  let analyticsGraphData: {
+    date: string;
+    domainName: string;
+    pageView: string;
+  }[] = [];
+
+  if (analyticsData[0] && analyticsData?.length > 0) {
+    // sort by date
+    const sortedRows = [...(analyticsData[0].rows || [])].sort((a, b) =>
+      (a.dimensionValues?.[0]?.value || "").localeCompare(
+        b.dimensionValues?.[0]?.value || ""
+      )
+    );
+
+    // plus when the same date
+    const combinedRows = sortedRows.reduce(
+      (acc: any[], item: any, index: number) => {
+        const accDate = (acc[acc.length - 1] as any)?.dimensionValues[0].value;
+        const itemDate = item.dimensionValues?.[0]?.value;
+
+        if (accDate === itemDate) {
+          // combine the same date domain name
+          const accDomainName =
+            acc[acc.length - 1].dimensionValues[1].value +
+            acc[acc.length - 1].dimensionValues[2].value;
+          const itemDomainName =
+            item.dimensionValues[1].value + item.dimensionValues[2].value;
+
+          if (accDomainName === itemDomainName) {
+            // combine the same date
+            acc[acc.length - 1].metricValues[0].value =
+              Number(acc[acc.length - 1].metricValues[0].value) +
+              Number(item.metricValues[0].value);
+          } else {
+            acc.push(item);
+          }
+        } else {
+          acc.push(item);
+        }
+        return acc;
+      },
+      []
+    );
+
+    combinedRows.forEach((item: any) => {
+      analyticsGraphData.push({
+        date:
+          item.dimensionValues[0].value.slice(0, 4) +
+          "/" +
+          item.dimensionValues[0].value
+            .slice(4)
+            .replace(/(\d{2})(\d{2})/, "$1/$2"),
+        domainName:
+          item.dimensionValues[1].value + item.dimensionValues[2].value,
+        pageView: item.metricValues[0].value,
+      });
+    });
+  }
+
   await insertGa4Data({
     paramsId,
-    data: analyticsData,
+    data: analyticsGraphData,
   });
 
   //TODO: 日付ごとにinsertできるようにする。
-  const crawlData = await getSpecificCrawlData(paramsId);
-  function updatePageViews(crawlData: any, analyticsData: any) {
-    // 早期リターンでバリデーション
-    if (!crawlData[0]) {
-      console.warn("crawlData is undefined or null");
-      return undefined;
-    }
+  // const crawlData = await getSpecificCrawlData(paramsId);
+  // function updatePageViews(crawlData: any, analyticsData: any) {
+  //   // 早期リターンでバリデーション
+  //   if (!crawlData[0]) {
+  //     console.warn("crawlData is undefined or null");
+  //     return undefined;
+  //   }
 
-    if (
-      !analyticsData ||
-      !Array.isArray(analyticsData) ||
-      analyticsData.length === 0
-    ) {
-      console.warn("analyticsData is invalid");
-      return crawlData.json_data; // 元のデータをそのまま返す
-    }
+  //   if (
+  //     !analyticsData ||
+  //     !Array.isArray(analyticsData) ||
+  //     analyticsData.length === 0
+  //   ) {
+  //     console.warn("analyticsData is invalid");
+  //     return crawlData.json_data; // 元のデータをそのまま返す
+  //   }
 
-    const rows = analyticsData[0]?.rows;
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      console.warn("No rows found in analyticsData");
-      return crawlData.json_data;
-    }
+  //   const rows = analyticsData[0]?.rows;
+  //   if (!rows || !Array.isArray(rows) || rows.length === 0) {
+  //     console.warn("No rows found in analyticsData");
+  //     return crawlData.json_data;
+  //   }
 
-    const updatedCrawlData = JSON.parse(JSON.stringify(crawlData[0].json_data));
+  //   const updatedCrawlData = JSON.parse(JSON.stringify(crawlData[0].json_data));
 
-    rows.forEach((row) => {
-      try {
-        if (!row.dimensionValues?.[2] || !row.metricValues?.[0]) {
-          console.warn("Invalid row structure:", row);
-          return;
-        }
+  //   rows.forEach((row) => {
+  //     try {
+  //       if (!row.dimensionValues?.[2] || !row.metricValues?.[0]) {
+  //         console.warn("Invalid row structure:", row);
+  //         return;
+  //       }
 
-        const path = row.dimensionValues[2].value;
-        const pageViews = parseInt(row.metricValues[0].value);
+  //       const path = row.dimensionValues[2].value;
+  //       const pageViews = parseInt(row.metricValues[0].value);
 
-        if (!path || isNaN(pageViews)) {
-          console.warn(
-            `Invalid path or pageViews: path=${path}, pageViews=${pageViews}`
-          );
-          return;
-        }
+  //       if (!path || isNaN(pageViews)) {
+  //         console.warn(
+  //           `Invalid path or pageViews: path=${path}, pageViews=${pageViews}`
+  //         );
+  //         return;
+  //       }
 
-        console.info(`Processing: path=${path}, pageViews=${pageViews}`);
+  //       console.info(`Processing: path=${path}, pageViews=${pageViews}`);
 
-        if (path === "/") {
-          if ("top" in updatedCrawlData) {
-            updatedCrawlData.top.screenPageViews = pageViews;
-            console.info(`Updated top page views: ${pageViews}`);
-          }
-        } else if (path in updatedCrawlData) {
-          updatedCrawlData[path].screenPageViews = pageViews;
-          console.info(`Updated page views for ${path}: ${pageViews}`);
-        } else {
-          console.warn(`Path not found in crawl data: ${path}`);
-        }
-      } catch (error) {
-        console.error(`Error processing row:`, error);
-      }
-    });
+  //       if (path === "/") {
+  //         if ("top" in updatedCrawlData) {
+  //           updatedCrawlData.top.screenPageViews = pageViews;
+  //           console.info(`Updated top page views: ${pageViews}`);
+  //         }
+  //       } else if (path in updatedCrawlData) {
+  //         updatedCrawlData[path].screenPageViews = pageViews;
+  //         console.info(`Updated page views for ${path}: ${pageViews}`);
+  //       } else {
+  //         console.warn(`Path not found in crawl data: ${path}`);
+  //       }
+  //     } catch (error) {
+  //       console.error(`Error processing row:`, error);
+  //     }
+  //   });
 
-    return updatedCrawlData;
-  }
+  //   return updatedCrawlData;
+  // }
 
-  const result = updatePageViews(crawlData, analyticsData);
-  await insertCrawlData({
-    id: paramsId,
-    data: result,
-  });
+  // const result = updatePageViews(crawlData, analyticsData);
+  // await insertCrawlData({
+  //   id: paramsId,
+  //   data: result,
+  // });
 
-  return crawlData;
+  return analyticsGraphData;
 };
