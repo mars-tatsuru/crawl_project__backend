@@ -158,15 +158,17 @@ const formatCrawlData = async (userId: string, siteUrl: string) => {
                 title,
                 thumbnailPath,
                 level: parts.length - 1,
-                // screenPageViews: null,
               }
             : part === "top"
-            ? {}
+            ? {
+                url: siteUrl,
+                title: "Top",
+                level: 0,
+              }
             : {
                 url: parts.slice(0, index + 1).join("/"),
                 title: part,
                 level: parts.length - 2,
-                // screenPageViews: null,
               };
         }
 
