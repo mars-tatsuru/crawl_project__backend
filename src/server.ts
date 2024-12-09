@@ -236,8 +236,6 @@ server.post(
     };
 
     const results = await getAnalyticsData(paramsId);
-    console.log(results);
-
     return results;
   }
 );
